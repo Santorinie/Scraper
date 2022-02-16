@@ -5,8 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
+using Newtonsoft.Json;
 
 namespace Scraper
 {
@@ -57,6 +59,7 @@ namespace Scraper
             else
             {
                 var DaysPassed = DateTime.Now - FirstDate;
+                
 
                 List<string> PageContents = new List<string>();
 
@@ -106,64 +109,105 @@ namespace Scraper
 
     class Statistics
     {
-        
+        private static DateTime firstDate = new DateTime(2020, 1, 22);
+        private static List<string> countries;
+
         public Statistics()
         {
-            
+            countries = GetCountries();
+            DoSomeCrazyStuff();
+
 
             Console.WriteLine();
         }
 
-        private static void Parse(DateTime date)
+
+        private static void DoSomeCrazyStuff()
+        {
+            // parse a file
+            // Foreach them
+            // save every data to its corresponding txt
+
+
+            var dayspassed = DateTime.Now - firstDate;
+            string filename;
+            IEnumerable<string> input;
+            StreamWriter sw;
+            for (int i = 0; i < dayspassed.Days; i++)
+            {
+                Console.WriteLine(i);
+                filename = WebScraper.GetFileName(firstDate.AddDays(i));
+                input = File.ReadAllLines(filename).Skip(1);
+
+                foreach (var sor in input)
+                {
+                    foreach (var country in countries)
+                    {
+                        if (sor.Contains(country))
+                        {
+                            sw = new StreamWriter($"{country}.txt",true,Encoding.UTF8);
+                            sw.WriteLine(sor);
+                            sw.Close();
+
+                        }
+                    }
+                }
+            }
+
+        }
+
+        private static List<string> GetCountries()
+        {
+            //var DaysPassed = DateTime.Now - firstDate;
+            HashSet<string> countries = new HashSet<string>();
+            List<StatsModel> data = new List<StatsModel>();
+            for (int i = 250; i < 376; i++)
+            {
+
+                data = Parse(firstDate.AddDays(i));
+                foreach (var item in data)
+                {
+                    countries.Add(item.Country_Region);
+                }
+                Console.WriteLine(i);
+
+            }
+
+
+
+
+            return countries.ToList();
+
+        }
+
+        private static List<StatsModel> Parse(DateTime date)
         {
             var inputLine1 = File.ReadAllLines(WebScraper.GetFileName(date));
-            var input = inputLine1.Skip(1).First();
-            
-            var temp = input.Split(",");
-
-            NewStatsModel model;
-            if (DetermineFormat(inputLine1.First()) == "new")
+            var input = inputLine1.Skip(1);
+            List<StatsModel> models = new List<StatsModel>();
+            var result = DetermineFormat(inputLine1.First());
+            foreach (var item in input)
             {
-                model = new NewStatsModel()
+                
+                var temp = item.Replace(", ", ";").Replace("\"","").Split(",");
+                if (result == "new")
                 {
-                    FIPS = temp[0],
-                    Admin2 = temp[1],
-                    Province_State = temp[2],
-                    Country_Region = temp[3],
-                    Last_Update = GetCorrectDateFormat(temp[4], "new"),
-                    Latitude = double.Parse(temp[5]),
-                    Longitude = double.Parse(temp[6]),
-                    Confirmed = double.Parse(temp[7]),
-                    Deaths = double.Parse(temp[8]),
-                    Recovered = double.Parse(temp[9]),
-                    Active = double.Parse(temp[10]),
-                    Combined_Key = temp[11],
-                    Incident_Rate = double.Parse(temp[12]),
-                    Case_Fatality_Ratio = double.Parse(temp[13]),
-                    Format = "new"
+                    models.Add(new StatsModel(temp[0],temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8], temp[9]
+                        , temp[10], temp[11], temp[12], temp[13], result, date));
 
-                };
-            }
-            else
-            {
-
-                model = new NewStatsModel()
+                }
+                else
                 {
+                    models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], result, date));
+                }
 
 
-                    Province_State = temp[0],
-                    Country_Region = temp[1],
-                    Last_Update = GetCorrectDateFormat(temp[2], "old"),
-                    Confirmed = double.TryParse(temp[3], out _) ? double.Parse(temp[3]) : null,
-                    Deaths = double.TryParse(temp[4], out _) ? double.Parse(temp[4]) : null,
-                    Recovered = double.TryParse(temp[5], out _) ? double.Parse(temp[5]) : null,
-                    Format = "old"
-
-                };
             }
+            return models;
         }
 
 
+           
 
         private static string DetermineFormat(string input)
         {
@@ -173,21 +217,44 @@ namespace Scraper
 
         public static DateTime GetCorrectDateFormat(string datestring, string format)
         {
+            datestring = datestring.Split(" ").First();
 
+                
 
-            return format == "new"
+            try
+            {
+                return format == "new"
 
-                  ? DateTime.ParseExact(datestring, "yyyy-MM-dd HH:mm:ss",
+                  ? DateTime.ParseExact(datestring, "yyyy-MM-dd",
                       System.Globalization.CultureInfo.InvariantCulture)
 
-                  : DateTime.ParseExact(datestring, "M/dd/yyyy HH:mm",
+                  : DateTime.ParseExact(datestring, "M/dd/yyyy",
                       System.Globalization.CultureInfo.InvariantCulture);
+            }
+            catch (Exception)
+            {
 
+            }
+            try
+            {
+                return format == "new"
+
+                  ? DateTime.ParseExact(datestring, "yyyy-MM-dd",
+                      System.Globalization.CultureInfo.InvariantCulture)
+
+                  : DateTime.ParseExact(datestring, "M/dd/yy",
+                      System.Globalization.CultureInfo.InvariantCulture);
+            }
+            catch (Exception)
+            {
+
+            }
+            return DateTime.Now;
 
         }
     }
 
-    class NewStatsModel
+    class StatsModel
     {
 
         //FIPS,Admin2,Province_State,Country_Region,Last_Update,Lat,Long_,Confirmed,Deaths,Recovered,Active,Combined_Key,Incident_Rate,Case_Fatality_Ratio
@@ -196,17 +263,52 @@ namespace Scraper
         public string Admin2 { get; set; }
         public string Province_State { get; set; }
         public string Country_Region { get; set; }
-        public DateTime Last_Update { get; set; }
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
+        public DateTime? Last_Update { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
         public double? Confirmed { get; set; }
         public double? Deaths { get; set; }
         public double? Recovered { get; set; }
-        public double Active { get; set; }
+        public double? Active { get; set; }
         public string Combined_Key { get; set; }
-        public double Incident_Rate { get; set; }
-        public double Case_Fatality_Ratio { get; set; }
+        public double? Incident_Rate { get; set; }
+        public double? Case_Fatality_Ratio { get; set; }
         public string Format { get; set; }
+
+
+        public StatsModel(string fips,string admin2, string provincestate, string country, string lastupdate, string latitude,
+            string longitude, string confirmed, string deaths, string recovered, string active, string combinedkey, string incidentrate,
+            string casefatalityratio, string format,DateTime sender)
+        {
+            this.FIPS = fips;
+            this.Admin2 = admin2;
+            this.Province_State = provincestate;
+            this.Country_Region = country;
+            this.Last_Update = sender;
+            this.Latitude = latitude != "" && double.TryParse(latitude, out _) ? Convert.ToDouble(latitude) : null;
+            this.Longitude = longitude != "" && double.TryParse(longitude, out _) ? Convert.ToDouble(longitude) : null;
+            this.Confirmed = confirmed != "" && double.TryParse(confirmed, out _) ? Convert.ToDouble(confirmed) : null;
+            this.Deaths = deaths != "" && double.TryParse(deaths, out _) ? Convert.ToDouble(deaths) : null;
+            this.Recovered = recovered != "" && double.TryParse(recovered, out _) ? Convert.ToDouble(recovered) : null;
+            this.Active = active != "" && double.TryParse(active, out _) ? Convert.ToDouble(active) : null;
+            this.Combined_Key = combinedkey;
+            this.Incident_Rate = incidentrate != "" && double.TryParse(incidentrate, out _) ? Convert.ToDouble(incidentrate) : null;
+            this.Case_Fatality_Ratio = casefatalityratio != "" && double.TryParse(casefatalityratio, out _) ? Convert.ToDouble(casefatalityratio) : null;
+            this.Format = format;
+        }
+
+        public StatsModel(string province, string country, string lastupdate, string confirmed, string deaths, string recovered,string format, DateTime sender)
+        {
+            // Province/State,Country/Region,Last Update,Confirmed,Deaths,Recovered
+
+            this.Province_State = province;
+            this.Country_Region = country;
+            this.Last_Update = sender;
+            this.Confirmed = confirmed != "" && double.TryParse(confirmed, out _) ? Convert.ToDouble(confirmed) : null;
+            this.Deaths = deaths != "" && double.TryParse(deaths, out _) ? Convert.ToDouble(deaths) : null;
+            this.Recovered = recovered != "" && double.TryParse(recovered, out _) ? Convert.ToDouble(recovered) : null;
+            this.Format = format;
+        }
 
 
     }
