@@ -16,6 +16,7 @@ namespace Scraper
     {
         static void Main(string[] args)
         {
+            WebScraper scraper = new WebScraper();
             Statistics stats = new Statistics();
         }
     }
@@ -24,119 +25,43 @@ namespace Scraper
     {
         private const string FirstData = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/01-22-2020.csv";
         public static DateTime FirstDate = new DateTime(2020, 1, 22);
-        // Uses a Database format since this date
-        
-        public static DateTime NewFormat = new DateTime(2020,7,17);
+        private static List<string> countries;
+
+        // Uses a new format since this date
+        public static DateTime NewFormat = new DateTime(2020,5,30);
+
+        private static DateTime LastFetched;
+        private static double DaysPassed; 
 
 
         public WebScraper()
         {
-
+            Init();
         }
 
-        public static dynamic GetPageContent_All(bool WriteToFile)
+        private static void Init()
         {
-
-            if (WriteToFile)
-            {
-                var DaysPassed = DateTime.Now - FirstDate;
-                DateTime currentDate;
-                string currentDateString;
-                for (int i = 0; i < DaysPassed.Days; i++)
-                {
-                    currentDate = FirstDate.AddDays(i);
-                    currentDateString = $"{currentDate.Year}-{currentDate.Month.ToString("d2")}-{currentDate.Day.ToString("d2")}.txt";
-                    if (!File.Exists(currentDateString))
-                    {
-                        File.WriteAllTextAsync(currentDateString, GetPageContent_Single(GetLink_Custom(FirstDate.AddDays(i))));
-
-                        //client.DownloadFile(GetLink_Custom(FirstDate.AddDays(i)), currentDateString);
-                    }
-                }
-
-                return null;
-            }
-            else
-            {
-                var DaysPassed = DateTime.Now - FirstDate;
-                
-
-                List<string> PageContents = new List<string>();
-
-                for (int i = 0; i < DaysPassed.Days; i++)
-                {
-                    PageContents.Add(GetPageContent_Single(GetLink_Custom(FirstDate.AddDays(i))));
-                    Console.WriteLine(i);
-                }
-
-                return PageContents;
-
-            }
-            
- 
-        }
-
-        public static string GetFileName(DateTime date)
-        {
-            
-            return $"{date.Year}-{date.Month.ToString("d2")}-{date.Day.ToString("d2")}.txt";
-
-        }
-
-        public static string GetPageContent_Single(string url)
-        {
-            var httpClient = new HttpClient();
-            return httpClient.GetStringAsync(url).Result;
-        }
-
-        public static string GetLink_Custom(DateTime customDate)
-        {
-            
-            string date = $"{customDate.Month.ToString("d2")}-{customDate.Day.ToString("d2")}-{customDate.Year}";
-            return $"https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{date}.csv";
-
-        }
-
-        public static string GetLink_Today()
-        {
-            var today = DateTime.Now;
-            string date = $"{today.Month.ToString("d2")}-{today.Day.ToString("d2")}-{today.Year}";
-            return $"https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{date}.csv";
-        }
-
-
-    }
-
-    class Statistics
-    {
-        private static DateTime firstDate = new DateTime(2020, 1, 22);
-        private static List<string> countries;
-
-        public Statistics()
-        {
+            DaysPassed = (DateTime.Now - FirstDate).Days;
+            LastFetched = GetFetchDate();
             countries = GetCountries();
-            DoSomeCrazyStuff();
-
-
-            Console.WriteLine();
+            GetPageContent_All(true); // fetch
         }
 
-
-        private static void DoSomeCrazyStuff()
+        public static void Categorize_All()
         {
             // parse a file
             // Foreach them
             // save every data to its corresponding txt
 
 
-            var dayspassed = DateTime.Now - firstDate;
+            var dayspassed = DateTime.Now - FirstDate;
             string filename;
             IEnumerable<string> input;
             StreamWriter sw;
             for (int i = 0; i < dayspassed.Days; i++)
             {
                 Console.WriteLine(i);
-                filename = WebScraper.GetFileName(firstDate.AddDays(i));
+                filename = WebScraper.GetFileName(FirstDate.AddDays(i));
                 input = File.ReadAllLines(filename).Skip(1);
 
                 foreach (var sor in input)
@@ -145,7 +70,7 @@ namespace Scraper
                     {
                         if (sor.Contains(country))
                         {
-                            sw = new StreamWriter($"{country}.txt",true,Encoding.UTF8);
+                            sw = new StreamWriter($"{country}.txt", true, Encoding.UTF8);
                             sw.WriteLine(sor);
                             sw.Close();
 
@@ -156,6 +81,23 @@ namespace Scraper
 
         }
 
+        public static void Categorize_Single(IEnumerable<string> data)
+        {
+            StreamWriter sw;
+            foreach (var line in data.Skip(1))
+            {
+                foreach (var country in countries)
+                {
+                    if (line.Contains($",{country},"))
+                    {
+                        sw = new StreamWriter($"{country}.txt",true,Encoding.UTF8);
+                        sw.WriteLine(line);
+                        sw.Close();
+                    }
+                }
+            }
+        }
+
         private static List<string> GetCountries()
         {
             //var DaysPassed = DateTime.Now - firstDate;
@@ -164,7 +106,7 @@ namespace Scraper
             for (int i = 250; i < 376; i++)
             {
 
-                data = Parse(firstDate.AddDays(i));
+                data = Parse(FirstDate.AddDays(i));
                 foreach (var item in data)
                 {
                     countries.Add(item.Country_Region);
@@ -180,7 +122,7 @@ namespace Scraper
 
         }
 
-        private static List<StatsModel> Parse(DateTime date)
+        public static List<StatsModel> Parse(DateTime date)
         {
             var inputLine1 = File.ReadAllLines(WebScraper.GetFileName(date));
             var input = inputLine1.Skip(1);
@@ -188,11 +130,11 @@ namespace Scraper
             var result = DetermineFormat(inputLine1.First());
             foreach (var item in input)
             {
-                
-                var temp = item.Replace(", ", ";").Replace("\"","").Split(",");
+
+                var temp = item.Replace(", ", ";").Replace("\"", "").Split(",");
                 if (result == "new")
                 {
-                    models.Add(new StatsModel(temp[0],temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8], temp[9]
+                    models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8], temp[9]
                         , temp[10], temp[11], temp[12], temp[13], result, date));
 
                 }
@@ -206,8 +148,47 @@ namespace Scraper
             return models;
         }
 
+        public static IEnumerable<StatsModel> Parse(IEnumerable<string> data)
+        {
+            
+            var input = data.Skip(1);
+            List<StatsModel> models = new List<StatsModel>();
+            //var result = DetermineFormat(inputLine1.First());
+            
+            foreach (var item in input)
+            {
 
-           
+                var temp = item.Replace(", ", ";").Replace("\"", "").Split(",");
+                
+                if (GetCorrectDateFormat(temp[4],"new") >= NewFormat)
+                {
+                    models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8], temp[9]
+                        , temp[10], temp[11], temp[12], temp[13], "new", GetCorrectDateFormat(temp[4],"new")));
+
+                }
+                //else
+                //{
+                //    models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], result, GetCorrectDateFormat(temp[2],"old")));
+                //}
+
+               
+            }
+            return models;
+        }
+
+        private static DateTime GetFetchDate()
+        {
+            for (int i = 0; i >= -DaysPassed; i--)
+            {
+                var currentDate = DateTime.Now.AddDays(i);
+                if (File.Exists(GetFileName(currentDate)))
+                {
+
+                    return currentDate;
+                }
+            }
+            return FirstDate;
+        }
 
         private static string DetermineFormat(string input)
         {
@@ -219,7 +200,7 @@ namespace Scraper
         {
             datestring = datestring.Split(" ").First();
 
-                
+
 
             try
             {
@@ -249,9 +230,165 @@ namespace Scraper
             {
 
             }
-            return DateTime.Now;
+            return FirstDate;
 
         }
+
+        public static dynamic GetPageContent_All(bool WriteToFile)
+        {
+
+            if (WriteToFile)
+            {
+                var DaysPassed = DateTime.Now - FirstDate;
+                DateTime currentDate;
+
+                for (int i = 0; i < DaysPassed.Days; i++)
+                {
+                    currentDate = FirstDate.AddDays(i);
+                    if (!File.Exists(GetFileName(GetLink_Custom(currentDate))))
+                    {
+                        //File.WriteAllTextAsync(currentDateString, GetPageContent_Single(GetLink_Custom(FirstDate.AddDays(i)),false));
+                        GetPageContent_Single(GetLink_Custom(currentDate), true,true);
+                        
+                    }
+                }
+
+                return null;
+            }
+            else
+            {
+                var DaysPassed = DateTime.Now - FirstDate;
+                
+
+                List<string> PageContents = new List<string>();
+
+                for (int i = 0; i < DaysPassed.Days; i++)
+                {
+                    PageContents.Add(GetPageContent_Single(GetLink_Custom(FirstDate.AddDays(i)),false,false));
+                    Console.WriteLine(i);
+                }
+
+                return PageContents;
+
+            }
+            
+ 
+        }
+
+        public static string GetFileName(DateTime date)
+        {
+            
+            return $"{date.Year}-{date.Month.ToString("d2")}-{date.Day.ToString("d2")}.txt";
+
+        }
+        public static string GetFileName(string url)
+        {
+
+            var temp = url.Replace(@"https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/", "").Replace(".csv", "").Split("-"); ;
+            
+
+            return $"{temp[2]}-{temp[0]}-{temp[1]}.txt";
+        }
+
+        public static string GetPageContent_Single(string url,bool writefile,bool categorize)
+        {
+            var httpClient = new HttpClient();
+            var result = httpClient.GetStringAsync(url).Result;
+            
+            
+            if (writefile)
+            {
+                File.WriteAllText(GetFileName(url),result,Encoding.UTF8);
+            }
+            if (categorize)
+            {
+                Categorize_Single(File.ReadAllLines(GetFileName(url)));
+            }
+
+            return result;
+        }
+
+        public static string GetLink_Custom(DateTime customDate)
+        {
+            
+            string date = $"{customDate.Month.ToString("d2")}-{customDate.Day.ToString("d2")}-{customDate.Year}";
+            return $"https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{date}.csv";
+
+        }
+
+        public static string GetLink_Today()
+        {
+            var today = DateTime.Now;
+            string date = $"{today.Month.ToString("d2")}-{today.Day.ToString("d2")}-{today.Year}";
+            return $"https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/{date}.csv";
+        }
+
+        public static IEnumerable<string> ReadCountry(string country)
+        {
+            return File.ReadAllLines($"{country}.txt",Encoding.UTF8);
+        }
+
+
+    }
+
+    class Statistics
+    {
+        private IEnumerable<string> CountryData;
+
+
+
+        public Statistics()
+        {
+            CountryData = WebScraper.ReadCountry("Hungary");
+
+            var result = WebScraper.Parse(CountryData);
+            var dec31 = result.First(x => x.Last_Update == new DateTime(2021, 1, 1));
+            var jan1 = result.First(x => x.Last_Update == new DateTime(2021, 1, 2));
+            var sevenD = SevenDayAverage_Cases(ref result,new DateTime(2021,7,5));
+
+            Console.WriteLine($"2020.12.31 és 2021.01.01 között {jan1.Confirmed-dec31.Confirmed} ember fertőződött meg");
+            Console.WriteLine($"7 days átlag: {sevenD}");
+            
+        }
+
+
+        public static double? SevenDayAverage_Cases(ref IEnumerable<StatsModel> lista,DateTime endDate)
+        {
+            
+            List<double?> dailyCases = new List<double?>();
+            for (int i = 0; i >= -6; i--)
+            {
+                DateTime currentDate = endDate.AddDays(i);
+                DateTime dayBeforeCurrentDate = endDate.AddDays(i - 1);
+
+                var adat1 = lista.First(x => x.Last_Update == currentDate);
+                var adat2 = lista.First(x => x.Last_Update == dayBeforeCurrentDate);
+
+                dailyCases.Add(adat2.Confirmed-adat2.Confirmed);
+            }
+            return dailyCases.Average();
+            // U U U U U U U
+        }
+
+        public static double? SevenDayAverage_Deaths(ref IEnumerable<StatsModel> lista, DateTime endDate)
+        {
+
+            List<double?> dailyCases = new List<double?>();
+            for (int i = 0; i >= -6; i--)
+            {
+                DateTime currentDate = endDate.AddDays(i);
+                DateTime dayBeforeCurrentDate = endDate.AddDays(i - 1);
+
+                var adat1 = lista.First(x => x.Last_Update == currentDate);
+                var adat2 = lista.First(x => x.Last_Update == dayBeforeCurrentDate);
+
+                dailyCases.Add(adat2.Deaths - adat2.Deaths);
+            }
+            return dailyCases.Average();
+            // U U U U U U U
+        }
+
+
     }
 
     class StatsModel
