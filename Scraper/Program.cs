@@ -283,14 +283,20 @@ namespace Scraper
 
             var result = WebScraper.Parse(CountryData);
 
+            Console.WriteLine(new DateTime(2021, 3, 9).ToShortDateString());
+            Console.WriteLine(NewCases(ref result, new DateTime(2021,3,9)));
+            Console.WriteLine(
+                SevenDayAverage_Cases(ref result, new DateTime(2021, 3, 9))
+                );
+            Console.WriteLine(NewDeaths(ref result, new DateTime(2021, 3, 9)));
 
         }
 
 
-        public static double? SevenDayAverage_Cases(ref IEnumerable<StatsModel> lista,DateTime endDate)
+        public static double SevenDayAverage_Cases(ref IEnumerable<StatsModel> lista,DateTime endDate)
         {
             
-            List<double?> dailyCases = new List<double?>();
+            List<double> dailyCases = new List<double>();
             for (int i = 0; i >= -6; i--)
             {
                 DateTime currentDate = endDate.AddDays(i);
@@ -299,16 +305,16 @@ namespace Scraper
                 var adat1 = lista.First(x => x.Last_Update == currentDate);
                 var adat2 = lista.First(x => x.Last_Update == dayBeforeCurrentDate);
 
-                dailyCases.Add(adat2.Confirmed-adat2.Confirmed);
+                dailyCases.Add(adat1.Confirmed-adat2.Confirmed);
             }
-            return dailyCases.Average();
-            // U U U U U U U
+            return Math.Round(dailyCases.Average());
+            
         }
 
-        public static double? SevenDayAverage_Deaths(ref IEnumerable<StatsModel> lista, DateTime endDate)
+        public static double SevenDayAverage_Deaths(ref IEnumerable<StatsModel> lista, DateTime endDate)
         {
 
-            List<double?> dailyCases = new List<double?>();
+            List<double> dailyCases = new List<double>();
             for (int i = 0; i >= -6; i--)
             {
                 DateTime currentDate = endDate.AddDays(i);
@@ -317,10 +323,28 @@ namespace Scraper
                 var adat1 = lista.First(x => x.Last_Update == currentDate);
                 var adat2 = lista.First(x => x.Last_Update == dayBeforeCurrentDate);
 
-                dailyCases.Add(adat2.Deaths - adat2.Deaths);
+                dailyCases.Add(adat1.Deaths - adat2.Deaths);
             }
-            return dailyCases.Average();
-            // U U U U U U U
+            return Math.Round(dailyCases.Average());
+            
+        }
+
+        public static double NewCases(ref IEnumerable<StatsModel> lista, DateTime date)
+        {
+            StatsModel day = lista.First(x => x.Last_Update == date);
+            StatsModel theDayBefore = lista.First(x => x.Last_Update == date.AddDays(-1));
+
+            return day.Confirmed - theDayBefore.Confirmed;
+
+        }
+
+        public static double NewDeaths(ref IEnumerable<StatsModel> lista, DateTime date)
+        {
+            StatsModel day = lista.First(x => x.Last_Update == date);
+            StatsModel theDayBefore = lista.First(x => x.Last_Update == date.AddDays(-1));
+
+            return day.Deaths - theDayBefore.Deaths;
+
         }
 
 
@@ -329,22 +353,20 @@ namespace Scraper
     class StatsModel
     {
 
-        //FIPS,Admin2,Province_State,Country_Region,Last_Update,Lat,Long_,Confirmed,Deaths,Recovered,Active,Combined_Key,Incident_Rate,Case_Fatality_Ratio
-
         public string FIPS { get; set; }
         public string Admin2 { get; set; }
         public string Province_State { get; set; }
         public string Country_Region { get; set; }
         public DateTime? Last_Update { get; set; }
-        public double? Latitude { get; set; }
-        public double? Longitude { get; set; }
-        public double? Confirmed { get; set; }
-        public double? Deaths { get; set; }
-        public double? Recovered { get; set; }
-        public double? Active { get; set; }
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public double Confirmed { get; set; }
+        public double Deaths { get; set; }
+        public double Recovered { get; set; }
+        public double Active { get; set; }
         public string Combined_Key { get; set; }
-        public double? Incident_Rate { get; set; }
-        public double? Case_Fatality_Ratio { get; set; }
+        public double Incident_Rate { get; set; }
+        public double Case_Fatality_Ratio { get; set; }
         
 
 
@@ -357,30 +379,17 @@ namespace Scraper
             this.Province_State = provincestate;
             this.Country_Region = country;
             this.Last_Update = DateTime.TryParseExact(lastupdate, "yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out _) ? DateTime.ParseExact(lastupdate, "yyyy-MM-dd",CultureInfo.InvariantCulture) : DateTime.MinValue;
-            this.Latitude = latitude != "" && double.TryParse(latitude, out _) ? Convert.ToDouble(latitude) : null;
-            this.Longitude = longitude != "" && double.TryParse(longitude, out _) ? Convert.ToDouble(longitude) : null;
-            this.Confirmed = confirmed != "" && double.TryParse(confirmed, out _) ? Convert.ToDouble(confirmed) : null;
-            this.Deaths = deaths != "" && double.TryParse(deaths, out _) ? Convert.ToDouble(deaths) : null;
-            this.Recovered = recovered != "" && double.TryParse(recovered, out _) ? Convert.ToDouble(recovered) : null;
-            this.Active = active != "" && double.TryParse(active, out _) ? Convert.ToDouble(active) : null;
+            this.Latitude = latitude != "" && double.TryParse(latitude, out _) ? Convert.ToDouble(latitude) : 0;
+            this.Longitude = longitude != "" && double.TryParse(longitude, out _) ? Convert.ToDouble(longitude) : 0;
+            this.Confirmed = confirmed != "" && double.TryParse(confirmed, out _) ? Convert.ToDouble(confirmed) : 0;
+            this.Deaths = deaths != "" && double.TryParse(deaths, out _) ? Convert.ToDouble(deaths) : 0;
+            this.Recovered = recovered != "" && double.TryParse(recovered, out _) ? Convert.ToDouble(recovered) : 0;
+            this.Active = active != "" && double.TryParse(active, out _) ? Convert.ToDouble(active) : 0;
             this.Combined_Key = combinedkey;
-            this.Incident_Rate = incidentrate != "" && double.TryParse(incidentrate, out _) ? Convert.ToDouble(incidentrate) : null;
-            this.Case_Fatality_Ratio = casefatalityratio != "" && double.TryParse(casefatalityratio, out _) ? Convert.ToDouble(casefatalityratio) : null;
+            this.Incident_Rate = incidentrate != "" && double.TryParse(incidentrate, out _) ? Convert.ToDouble(incidentrate) : 0;
+            this.Case_Fatality_Ratio = casefatalityratio != "" && double.TryParse(casefatalityratio, out _) ? Convert.ToDouble(casefatalityratio) : 0;
             
         }
-
-        //public StatsModel(string province, string country, string lastupdate, string confirmed, string deaths, string recovered,string format, DateTime sender)
-        //{
-        //    // Province/State,Country/Region,Last Update,Confirmed,Deaths,Recovered
-
-        //    this.Province_State = province;
-        //    this.Country_Region = country;
-        //    this.Last_Update = sender;
-        //    this.Confirmed = confirmed != "" && double.TryParse(confirmed, out _) ? Convert.ToDouble(confirmed) : null;
-        //    this.Deaths = deaths != "" && double.TryParse(deaths, out _) ? Convert.ToDouble(deaths) : null;
-        //    this.Recovered = recovered != "" && double.TryParse(recovered, out _) ? Convert.ToDouble(recovered) : null;
-        //    this.Format = format;
-        //}
 
 
     }
