@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
 using Newtonsoft.Json;
@@ -28,7 +30,7 @@ namespace Scraper
         private static List<string> countries;
 
         // Uses a new format since this date
-        public static DateTime NewFormat = new DateTime(2020,5,30);
+        public static DateTime NewFormat = new DateTime(2020,5,29); // in file - last updated
 
         private static DateTime LastFetched;
         private static double DaysPassed; 
@@ -37,6 +39,9 @@ namespace Scraper
         public WebScraper()
         {
             Init();
+            
+            
+            
         }
 
         private static void Init()
@@ -44,36 +49,42 @@ namespace Scraper
             DaysPassed = (DateTime.Now - FirstDate).Days;
             LastFetched = GetFetchDate();
             countries = GetCountries();
-            GetPageContent_All(true); // fetch
+            GetPageContent_All(); // fetch
         }
 
         public static void Categorize_All()
-        {
-            // parse a file
-            // Foreach them
-            // save every data to its corresponding txt
-
-
-            var dayspassed = DateTime.Now - FirstDate;
+        {            
             string filename;
             IEnumerable<string> input;
             StreamWriter sw;
-            for (int i = 0; i < dayspassed.Days; i++)
+            Regex regex;
+            for (int i = 0; i < DaysPassed; i++)
             {
                 Console.WriteLine(i);
-                filename = WebScraper.GetFileName(FirstDate.AddDays(i));
-                input = File.ReadAllLines(filename).Skip(1);
-
-                foreach (var sor in input)
+                filename = GetFileName(FirstDate.AddDays(i));
+                if (DateTime.ParseExact(filename.Replace(".txt", ""), "yyyy-MM-dd", CultureInfo.InvariantCulture) >= NewFormat)
                 {
-                    foreach (var country in countries)
-                    {
-                        if (sor.Contains(country))
-                        {
-                            sw = new StreamWriter($"{country}.txt", true, Encoding.UTF8);
-                            sw.WriteLine(sor);
-                            sw.Close();
 
+
+                    input = File.ReadAllLines(filename).Skip(1);
+
+                    foreach (var sor in input)
+                    {
+                        regex = new Regex(@"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}");
+                        if (regex.IsMatch(sor) == false)
+                        {
+                            regex = new Regex(@"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}");
+                        }
+                        var result = sor.Replace(regex.Match(sor).ToString(),filename.Replace(".txt",""));
+                        foreach (var country in countries)
+                        {
+                            if (result.Contains($",{country},"))
+                            {
+                                sw = new StreamWriter($"{country}.txt", true, Encoding.UTF8);
+                                sw.WriteLine(result);
+                                sw.Close();
+
+                            }
                         }
                     }
                 }
@@ -81,17 +92,25 @@ namespace Scraper
 
         }
 
-        public static void Categorize_Single(IEnumerable<string> data)
+        public static void Categorize_Single(IEnumerable<string> data,string filename)
         {
             StreamWriter sw;
+           
+            Regex regex;
             foreach (var line in data.Skip(1))
             {
                 foreach (var country in countries)
                 {
+                    regex = new Regex(@"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}");
+                    if (regex.IsMatch(line) == false)
+                    {
+                        regex = new Regex(@"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}");
+                    }
+                    var result = line.Replace(regex.Match(line).ToString(), filename.Replace(".txt", ""));
                     if (line.Contains($",{country},"))
                     {
                         sw = new StreamWriter($"{country}.txt",true,Encoding.UTF8);
-                        sw.WriteLine(line);
+                        sw.WriteLine(result);
                         sw.Close();
                     }
                 }
@@ -100,49 +119,35 @@ namespace Scraper
 
         private static List<string> GetCountries()
         {
-            //var DaysPassed = DateTime.Now - firstDate;
+            
             HashSet<string> countries = new HashSet<string>();
             List<StatsModel> data = new List<StatsModel>();
-            for (int i = 250; i < 376; i++)
+
+
+            data = Parse(FirstDate.AddDays(365)).ToList();
+            foreach (var item in data)
             {
-
-                data = Parse(FirstDate.AddDays(i));
-                foreach (var item in data)
-                {
-                    countries.Add(item.Country_Region);
-                }
-                Console.WriteLine(i);
-
+                countries.Add(item.Country_Region);
             }
-
-
 
 
             return countries.ToList();
 
         }
 
-        public static List<StatsModel> Parse(DateTime date)
+        public static IEnumerable<StatsModel> Parse(DateTime date)
         {
             var inputLine1 = File.ReadAllLines(WebScraper.GetFileName(date));
             var input = inputLine1.Skip(1);
             List<StatsModel> models = new List<StatsModel>();
-            var result = DetermineFormat(inputLine1.First());
+
             foreach (var item in input)
             {
 
                 var temp = item.Replace(", ", ";").Replace("\"", "").Split(",");
-                if (result == "new")
-                {
-                    models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8], temp[9]
-                        , temp[10], temp[11], temp[12], temp[13], result, date));
 
-                }
-                else
-                {
-                    models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], result, date));
-                }
-
+                models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8], temp[9]
+                    , temp[10], temp[11], temp[12], temp[13]));
 
             }
             return models;
@@ -160,16 +165,11 @@ namespace Scraper
 
                 var temp = item.Replace(", ", ";").Replace("\"", "").Split(",");
                 
-                if (GetCorrectDateFormat(temp[4],"new") >= NewFormat)
-                {
-                    models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8], temp[9]
-                        , temp[10], temp[11], temp[12], temp[13], "new", GetCorrectDateFormat(temp[4],"new")));
 
-                }
-                //else
-                //{
-                //    models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], result, GetCorrectDateFormat(temp[2],"old")));
-                //}
+                    models.Add(new StatsModel(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], temp[7], temp[8], temp[9]
+                        , temp[10], temp[11], temp[12], temp[13]));
+
+                
 
                
             }
@@ -190,55 +190,9 @@ namespace Scraper
             return FirstDate;
         }
 
-        private static string DetermineFormat(string input)
+        public static void GetPageContent_All()
         {
 
-            return input.Contains("FIPS") ? "new" : "old";
-        }
-
-        public static DateTime GetCorrectDateFormat(string datestring, string format)
-        {
-            datestring = datestring.Split(" ").First();
-
-
-
-            try
-            {
-                return format == "new"
-
-                  ? DateTime.ParseExact(datestring, "yyyy-MM-dd",
-                      System.Globalization.CultureInfo.InvariantCulture)
-
-                  : DateTime.ParseExact(datestring, "M/dd/yyyy",
-                      System.Globalization.CultureInfo.InvariantCulture);
-            }
-            catch (Exception)
-            {
-
-            }
-            try
-            {
-                return format == "new"
-
-                  ? DateTime.ParseExact(datestring, "yyyy-MM-dd",
-                      System.Globalization.CultureInfo.InvariantCulture)
-
-                  : DateTime.ParseExact(datestring, "M/dd/yy",
-                      System.Globalization.CultureInfo.InvariantCulture);
-            }
-            catch (Exception)
-            {
-
-            }
-            return FirstDate;
-
-        }
-
-        public static dynamic GetPageContent_All(bool WriteToFile)
-        {
-
-            if (WriteToFile)
-            {
                 var DaysPassed = DateTime.Now - FirstDate;
                 DateTime currentDate;
 
@@ -247,30 +201,13 @@ namespace Scraper
                     currentDate = FirstDate.AddDays(i);
                     if (!File.Exists(GetFileName(GetLink_Custom(currentDate))))
                     {
-                        //File.WriteAllTextAsync(currentDateString, GetPageContent_Single(GetLink_Custom(FirstDate.AddDays(i)),false));
-                        GetPageContent_Single(GetLink_Custom(currentDate), true,true);
+                        GetPageContent_Single(GetLink_Custom(currentDate), true,true); // downloads file
                         
                     }
                 }
 
-                return null;
-            }
-            else
-            {
-                var DaysPassed = DateTime.Now - FirstDate;
                 
-
-                List<string> PageContents = new List<string>();
-
-                for (int i = 0; i < DaysPassed.Days; i++)
-                {
-                    PageContents.Add(GetPageContent_Single(GetLink_Custom(FirstDate.AddDays(i)),false,false));
-                    Console.WriteLine(i);
-                }
-
-                return PageContents;
-
-            }
+            
             
  
         }
@@ -294,15 +231,16 @@ namespace Scraper
         {
             var httpClient = new HttpClient();
             var result = httpClient.GetStringAsync(url).Result;
-            
-            
+
+
+
             if (writefile)
             {
                 File.WriteAllText(GetFileName(url),result,Encoding.UTF8);
             }
             if (categorize)
             {
-                Categorize_Single(File.ReadAllLines(GetFileName(url)));
+                Categorize_Single(File.ReadAllLines(GetFileName(url)),GetFileName(url));
             }
 
             return result;
@@ -339,16 +277,13 @@ namespace Scraper
 
         public Statistics()
         {
+            
+
             CountryData = WebScraper.ReadCountry("Hungary");
 
             var result = WebScraper.Parse(CountryData);
-            var dec31 = result.First(x => x.Last_Update == new DateTime(2021, 1, 1));
-            var jan1 = result.First(x => x.Last_Update == new DateTime(2021, 1, 2));
-            var sevenD = SevenDayAverage_Cases(ref result,new DateTime(2021,7,5));
 
-            Console.WriteLine($"2020.12.31 és 2021.01.01 között {jan1.Confirmed-dec31.Confirmed} ember fertőződött meg");
-            Console.WriteLine($"7 days átlag: {sevenD}");
-            
+
         }
 
 
@@ -410,18 +345,18 @@ namespace Scraper
         public string Combined_Key { get; set; }
         public double? Incident_Rate { get; set; }
         public double? Case_Fatality_Ratio { get; set; }
-        public string Format { get; set; }
+        
 
 
         public StatsModel(string fips,string admin2, string provincestate, string country, string lastupdate, string latitude,
             string longitude, string confirmed, string deaths, string recovered, string active, string combinedkey, string incidentrate,
-            string casefatalityratio, string format,DateTime sender)
+            string casefatalityratio)
         {
             this.FIPS = fips;
             this.Admin2 = admin2;
             this.Province_State = provincestate;
             this.Country_Region = country;
-            this.Last_Update = sender;
+            this.Last_Update = DateTime.TryParseExact(lastupdate, "yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out _) ? DateTime.ParseExact(lastupdate, "yyyy-MM-dd",CultureInfo.InvariantCulture) : DateTime.MinValue;
             this.Latitude = latitude != "" && double.TryParse(latitude, out _) ? Convert.ToDouble(latitude) : null;
             this.Longitude = longitude != "" && double.TryParse(longitude, out _) ? Convert.ToDouble(longitude) : null;
             this.Confirmed = confirmed != "" && double.TryParse(confirmed, out _) ? Convert.ToDouble(confirmed) : null;
@@ -431,21 +366,21 @@ namespace Scraper
             this.Combined_Key = combinedkey;
             this.Incident_Rate = incidentrate != "" && double.TryParse(incidentrate, out _) ? Convert.ToDouble(incidentrate) : null;
             this.Case_Fatality_Ratio = casefatalityratio != "" && double.TryParse(casefatalityratio, out _) ? Convert.ToDouble(casefatalityratio) : null;
-            this.Format = format;
+            
         }
 
-        public StatsModel(string province, string country, string lastupdate, string confirmed, string deaths, string recovered,string format, DateTime sender)
-        {
-            // Province/State,Country/Region,Last Update,Confirmed,Deaths,Recovered
+        //public StatsModel(string province, string country, string lastupdate, string confirmed, string deaths, string recovered,string format, DateTime sender)
+        //{
+        //    // Province/State,Country/Region,Last Update,Confirmed,Deaths,Recovered
 
-            this.Province_State = province;
-            this.Country_Region = country;
-            this.Last_Update = sender;
-            this.Confirmed = confirmed != "" && double.TryParse(confirmed, out _) ? Convert.ToDouble(confirmed) : null;
-            this.Deaths = deaths != "" && double.TryParse(deaths, out _) ? Convert.ToDouble(deaths) : null;
-            this.Recovered = recovered != "" && double.TryParse(recovered, out _) ? Convert.ToDouble(recovered) : null;
-            this.Format = format;
-        }
+        //    this.Province_State = province;
+        //    this.Country_Region = country;
+        //    this.Last_Update = sender;
+        //    this.Confirmed = confirmed != "" && double.TryParse(confirmed, out _) ? Convert.ToDouble(confirmed) : null;
+        //    this.Deaths = deaths != "" && double.TryParse(deaths, out _) ? Convert.ToDouble(deaths) : null;
+        //    this.Recovered = recovered != "" && double.TryParse(recovered, out _) ? Convert.ToDouble(recovered) : null;
+        //    this.Format = format;
+        //}
 
 
     }
